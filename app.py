@@ -4,7 +4,7 @@ import os
 from ingestpdf import create_embedding_index
 from aiapi import ask
 import json
-from config import GEMINI_MODEL_LLM, CHUNK_SIZE, CHUNK_OVERLAP, TOP_K_RETRIEVAL, TOP_K_FINAL, CONFIDENCE_THRESHOLD
+from config import GEMINI_MODEL_LLM, CHUNK_SIZE, CHUNK_OVERLAP, TOP_K_RETRIEVAL, TOP_K_FINAL, CONFIDENCE_THRESHOLD, GEMINI_MODEL_EMBEDDING
 import uuid
 from evaluate import parse_golden_dataset, evaluate
 
@@ -38,10 +38,12 @@ if "chunk_size" not in st.session_state:
     st.session_state.chunk_size = CHUNK_SIZE
 if "chunk_overlap" not in st.session_state:
     st.session_state.chunk_overlap = CHUNK_OVERLAP
-if "gemini_model" not in st.session_state:
-    st.session_state.gemini_model = GEMINI_MODEL_LLM
+if "model" not in st.session_state:
+    st.session_state.model = GEMINI_MODEL_LLM
 if "num_chunks" not in st.session_state:
     st.session_state.num_chunks=10
+if "model_embed" not in st.session_state:
+    st.session_state.model_embed= GEMINI_MODEL_EMBEDDING
 
 st.caption(f"Loaded PDF: {st.session_state.ingested_file}, Number Chunks: {st.session_state.num_chunks}")
 
@@ -56,7 +58,8 @@ def upload_dialog():
                     tmp_path = tmp.name
                 with st.spinner("Ingesting PDF..."):
                     num_chunks = create_embedding_index(tmp_path, chunk_size=st.session_state.chunk_size,
-                                           chunk_overlap=st.session_state.chunk_overlap, collection_name=collection_name)
+                                           chunk_overlap=st.session_state.chunk_overlap, collection_name=collection_name, 
+                                           model_embed=st.session_state.model_embed)
                 st.session_state.ingested_file = uploaded.name
                 st.session_state.num_chunks = num_chunks
             st.rerun()
@@ -104,16 +107,24 @@ with col1:
 
 
             gemini_model = st.selectbox(
-                "Gemini Model", 
-                ["gemini-2.5-flash", "gemini-2.5-flash-lite"],
-                index=["gemini-2.5-flash", "gemini-2.5-flash-lite"].index(st.session_state.gemini_model)
+                "Model selection", 
+                ["gemini-2.5-flash", "qwen"],
+                index=["gemini-2.5-flash", "qwen"].index(st.session_state.model),
+                help="Use gemini-2.5-flash for the website streamlit deployment, otherwise use QWEN if running locally with Ollama"
+            )
+
+            embed_model = st.selectbox(
+                "Embedding model selection",
+                ["gemini-embedding-001", "nomic-embed-text"]
             )
 
             submitted = st.form_submit_button("Apply Settings")
 
             if submitted:
                 # Check if changed chunk settings
-                if (chunk_size != st.session_state.chunk_size) or (chunk_overlap != st.session_state.chunk_overlap):
+                if (chunk_size != st.session_state.chunk_size) or (chunk_overlap 
+                                                                   != st.session_state.chunk_overlap) or (embed_model
+                                                                                                          != st.session_state.model_embed):
                     st.session_state.ingested_file = None
                     reload_page = True
 
@@ -122,7 +133,8 @@ with col1:
                 st.session_state.top_k_final = top_k_f
                 st.session_state.chunk_size = chunk_size
                 st.session_state.chunk_overlap = chunk_overlap
-                st.session_state.gemini_model = gemini_model
+                st.session_state.model = gemini_model
+                st.session_state.model_embed = embed_model
                 
                 st.session_state.settings_changed = True
 
@@ -131,7 +143,7 @@ if st.session_state.get("settings_changed") == True:
     st.toast("Settings successfully changed")
     st.session_state.settings_changed = False
     if reload_page == True:
-        st.toast("Chunking settings have been changed. To apply, reupload PDF")
+        st.toast("Chunking / Embeddings settings have been changed. Please Reupload PDF")
 
 
 
@@ -165,8 +177,8 @@ with chat_tab:
                 with st.spinner("Thinking..."):
                     answer = ask(prompt, st.session_state.confidence_threshold, 
                                  st.session_state.top_k_retrieval, st.session_state.top_k_final, 
-                                 st.session_state.gemini_model, collection_name=collection_name, 
-                                 log_name=log_file
+                                 st.session_state.model, collection_name=collection_name, 
+                                 log_name=log_file, model_embed=st.session_state.model_embed
                                  )
                 st.markdown(answer)
             st.session_state.messages.append({"role": "assistant", "content": answer})
@@ -236,9 +248,9 @@ with evaluation_tab:
             st.success(f"Loaded: {file_content.name}")
 
             if st.button("Run Evaluation Via Golden Dataset"):
-                with st.spinner("Converting dataset into json format via Gemini"):
+                with st.spinner(f"Converting dataset into json format via {st.session_state.model}"):
                     try:
-                        golden_dataset = parse_golden_dataset(content)
+                        golden_dataset = parse_golden_dataset(content, model_llm=st.session_state.model)
                         st.info(f"Found {len(golden_dataset)} question answer pairs")
 
                     except Exception as e:
@@ -250,8 +262,8 @@ with evaluation_tab:
                         results = evaluate(
                             golden_dataset, confidence_threshold=st.session_state.confidence_threshold,
                             top_k_retrieval=st.session_state.top_k_retrieval, top_k_final=st.session_state.top_k_final,
-                            gemini_model_llm=st.session_state.gemini_model, collection_name=collection_name,
-                            log_name=log_file
+                            model_llm=st.session_state.model, collection_name=collection_name,
+                            log_name=log_file, model_embed=st.session_state.model_embed
                         )
                     
                     c1, c2, c3 = st.columns(3)

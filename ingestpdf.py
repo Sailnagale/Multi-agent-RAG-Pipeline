@@ -6,6 +6,7 @@ import os
 from dotenv import load_dotenv
 import json
 from config import GEMINI_MODEL_EMBEDDING, CHUNK_SIZE, CHUNK_OVERLAP
+from llm_model import use_embed
 
 
 
@@ -43,20 +44,10 @@ def chunking_text(pages, chunk_size=CHUNK_SIZE, overlap=CHUNK_OVERLAP):
     return chunks
 
 
-# Convert into embeddings (in this case using ollama but can change this section for any other model)
-def embed(text):
-
-    response = client.models.embed_content (
-        model=GEMINI_MODEL_EMBEDDING,
-        contents=text
 
 
-    )
 
-    return response.embeddings[0].values
-
-
-def create_embedding_index(pdf_path, chunk_size=CHUNK_SIZE, chunk_overlap=CHUNK_OVERLAP, collection_name="financial_docs"):
+def create_embedding_index(pdf_path, chunk_size=CHUNK_SIZE, chunk_overlap=CHUNK_OVERLAP, collection_name="financial_docs", model_embed=GEMINI_MODEL_EMBEDDING):
     pages = pdf_load(pdf_path)
     print(f"{len(pages)} pages have been loaded\n")
 
@@ -75,7 +66,7 @@ def create_embedding_index(pdf_path, chunk_size=CHUNK_SIZE, chunk_overlap=CHUNK_
 
     for i, chunk in enumerate(chunks):
         print(f"  Embedding chunk {i+1}/{len(chunks)}...", end="\r")
-        embedding = embed(chunk["text"])
+        embedding = use_embed(chunk["text"], model_embed) 
         collection.add(
             ids=[f"chunk_{i}"],
             embeddings=[embedding],

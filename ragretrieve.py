@@ -6,35 +6,20 @@ import os
 from dotenv import load_dotenv
 import json
 from config import TOP_K_RETRIEVAL, TOP_K_FINAL, CONFIDENCE_THRESHOLD, GEMINI_MODEL_EMBEDDING
-
-
-
-load_dotenv()
-client = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
+from llm_model import use_embed
 
 
 # Download the reranker model
 reranker = Ranker()
 
-def embed(text):
-
-    response = client.models.embed_content (
-        model=GEMINI_MODEL_EMBEDDING,
-        contents=text
-
-
-    )
-
-    return response.embeddings[0].values
-
 
 def retrieve(question, confidence_threshold=CONFIDENCE_THRESHOLD, top_k_retrieval=TOP_K_RETRIEVAL, 
-             top_k_final=TOP_K_FINAL, collection_name="financial_docs"):
+             top_k_final=TOP_K_FINAL, collection_name="financial_docs", model_embed=GEMINI_MODEL_EMBEDDING):
     client = chromadb.PersistentClient(path="./chroma_db")
     collection = client.get_collection(collection_name)
 
     
-    question_embedding = embed(question)
+    question_embedding = use_embed(question, model_embed)
     # Instead of 3-NN we get 10-NN first
     results = collection.query(
         query_embeddings=[question_embedding],

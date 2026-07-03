@@ -5,24 +5,18 @@ import time
 from dotenv import load_dotenv
 import os
 from google import genai
-from config import GEMINI_MODEL_LLM, TOP_K_RETRIEVAL, TOP_K_FINAL, CONFIDENCE_THRESHOLD
-
-# Put up here to run once the file loads
-load_dotenv()
-
-# print(os.getenv("GEMINI_API_KEY"))
-client = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
-
+from config import GEMINI_MODEL_LLM, TOP_K_RETRIEVAL, TOP_K_FINAL, CONFIDENCE_THRESHOLD, GEMINI_MODEL_EMBEDDING
+from llm_model import use_model
 
 
 def ask(question, confidence_threshold=CONFIDENCE_THRESHOLD, top_k_retrieval=TOP_K_FINAL, top_k_final=TOP_K_FINAL,
-        gemini_model_llm=GEMINI_MODEL_LLM, collection_name="financial_docs", log_name="monitor_log"):
+        model_llm=GEMINI_MODEL_LLM, collection_name="financial_docs", log_name="monitor_log", model_embed=GEMINI_MODEL_EMBEDDING):
     
     # Time logging for retrieving chunks
     start_time_chunks = time.time()
     # Retrieve the relevant chunks
     chunks_and_scores = retrieve(question, confidence_threshold=confidence_threshold, top_k_retrieval=top_k_retrieval,
-                                  top_k_final=top_k_final, collection_name=collection_name)
+                                  top_k_final=top_k_final, collection_name=collection_name, model_embed=model_embed)
 
     chunks = chunks_and_scores[0]
 
@@ -50,27 +44,21 @@ def ask(question, confidence_threshold=CONFIDENCE_THRESHOLD, top_k_retrieval=TOP
     # Time logging for response from LLM
     start_time_llm = time.time()
 
-    # response = requests.post(
-    #     "http://localhost:11434/api/generate",
-    #     json={
-    #         "model": "qwen2.5:7b",
-    #         "prompt": prompt,
-    #         "stream": False
-    #     }
-    # )
-
-    response = client.interactions.create(
-        model=gemini_model_llm,
-        input=prompt
-    )
+    
+    response = use_model(prompt, model_llm)
 
     generation_time = time.time() - start_time_llm
 
-    answer = response.output_text
-
-    log_query(question, answer, chunks, retrieval_time, generation_time, response.usage.total_input_tokens, 
+    if (model_llm == "gemini-2.5-flash"):
+        log_query(question, response.output_text, chunks, retrieval_time, generation_time, response.usage.total_input_tokens, 
               response.usage.total_output_tokens, log_name=log_name)
-    return answer
+        return response.output_text
+    elif (model_llm == "qwen"):
+        log_query(question, response["response"], chunks, retrieval_time, generation_time, response["prompt_eval_count"], 
+              response["eval_count"], log_name=log_name)
+        return response["response"]
+
+    
 
 # test it
 # question = "Should I invest in apple based on the financial statements?"
