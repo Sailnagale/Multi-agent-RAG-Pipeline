@@ -18,8 +18,8 @@ def retrieve(question, confidence_threshold=CONFIDENCE_THRESHOLD, top_k_retrieva
     client = chromadb.PersistentClient(path="./chroma_db")
     collection = client.get_collection(collection_name)
 
-    
-    question_embedding = use_embed(question, model_embed)
+    # remember embed is now returning a list
+    question_embedding = use_embed(question, model_embed)[0]
     # Instead of 3-NN we get 10-NN first
     results = collection.query(
         query_embeddings=[question_embedding],
@@ -53,6 +53,7 @@ def retrieve(question, confidence_threshold=CONFIDENCE_THRESHOLD, top_k_retrieva
     for i in range(0, top_k_final):
         if reranked[i]["score"] >= confidence_threshold:
             final_results.append(reranked[i]["text"])
+            print(f"Final chunk {i+1} | score: {reranked[i]['score']:.4f} | text: {reranked[i]['text'][:80]}")
     
     return [final_results, test_conf_list]
 

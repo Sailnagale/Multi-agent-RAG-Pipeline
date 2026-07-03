@@ -124,7 +124,7 @@ with col1:
 
             embed_model = st.selectbox(
                 "Embedding model selection",
-                ["gemini-embedding-001", "nomic-embed-text"]
+                ["gemini-embedding-001", "qwen3-embedding"]
             )
 
             submitted = st.form_submit_button("Apply Settings")

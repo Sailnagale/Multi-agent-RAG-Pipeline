@@ -5,7 +5,7 @@ from google import genai
 import os
 from dotenv import load_dotenv
 import json
-from config import GEMINI_MODEL_EMBEDDING, CHUNK_SIZE, CHUNK_OVERLAP
+from config import GEMINI_MODEL_EMBEDDING, CHUNK_SIZE, CHUNK_OVERLAP, BATCH_SIZE
 from llm_model import use_embed
 
 from selectolax.parser import HTMLParser
@@ -92,14 +92,22 @@ def create_embedding_index(file_path, chunk_size=CHUNK_SIZE, chunk_overlap=CHUNK
 
     # Need to avoid colissions now so use filename + index
     unique_name = os.path.basename(file_path)
-    for i, chunk in enumerate(chunks):
-        print(f"  Embedding chunk {i+1}/{len(chunks)}...", end="\r")
-        embedding = use_embed(chunk["text"], model_embed) 
+    # We now send to the API in batches 
+    # Batch size is hard coded and not put into streamlit UI as scaling it depends on hardware limitations
+    # Default is 100, if you want to increase or decrease, modify in config.py
+    for batch_start in range(0, len(chunks), BATCH_SIZE):
+        batch = chunks[batch_start:batch_start + BATCH_SIZE]
+        texts = [chunk["text"] for chunk in batch]
+        
+        print(f"Embedding batch {batch_start//BATCH_SIZE + 1}/{(len(chunks)-1)//BATCH_SIZE + 1}...")
+        embeddings = use_embed(texts, model_embed)
+        
+        ids = [f"{unique_name}_chunk_{batch_start + i}" for i in range(len(batch))]
         collection.add(
-            ids=[f"{unique_name}_chunk_{i}"],
-            embeddings=[embedding],
-            documents=[chunk["text"]],
-            metadatas=[{"page": chunk["page"], "source": chunk["source"]}]
+            ids=ids,
+            embeddings=embeddings,
+            documents=texts,
+            metadatas=[{"page": chunk["page"], "source": chunk["source"]} for chunk in batch]
         )
 
 # return the number of chunks for our opttinos

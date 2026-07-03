@@ -52,5 +52,8 @@ streamlit run app.py
 
 ### Phase Two
 - [ ] Incorporate demonstration screenshots
-- [ ] Seamless switching betwen Gemini and local Ollama LLM for local testing
-- [ ] Evaluation of a practical dataset to test retrieval accuracy
+- [X] Seamless switching betwen Gemini and local Ollama LLM for local testing
+- [X] Evaluation of a practical dataset to test retrieval accuracy
+- [X] Batching of embeddings rather than querying one-by-one
+- [ ] Writeup of evaluation results and conclusions
+ 

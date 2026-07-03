@@ -19,3 +19,7 @@ CONFIDENCE_THRESHOLD = 0.0001
 
 # Where query logs get saved
 LOG_FILE = "monitor_log.json"
+
+
+# Batch size set
+BATCH_SIZE = 100

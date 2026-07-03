@@ -31,14 +31,14 @@ def use_embed(prompt, model_embed=GEMINI_MODEL_EMBEDDING):
             model=GEMINI_MODEL_EMBEDDING,
             contents=prompt
         )
-        return response.embeddings[0].values
-    elif (model_embed == "nomic-embed-text"):
+        return [i.values for i in response.embeddings]
+    elif (model_embed == "qwen3-embedding"):
         response = requests.post(
             "http://localhost:11434/api/embed",
             json={
-                "model": "nomic-embed-text",
+                "model": "qwen3-embedding",
                 "input": prompt,
                 "keep_alive": "30m"
             }
         )
-        return response.json()["embeddings"][0]
+        return response.json()["embeddings"]
