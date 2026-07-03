@@ -7,6 +7,7 @@ import json
 from config import GEMINI_MODEL_LLM, CHUNK_SIZE, CHUNK_OVERLAP, TOP_K_RETRIEVAL, TOP_K_FINAL, CONFIDENCE_THRESHOLD, GEMINI_MODEL_EMBEDDING
 import uuid
 from evaluate import parse_golden_dataset, evaluate
+import chromadb
 
 st.set_page_config(page_title="Financial Report RAG", page_icon="📈")
 
@@ -25,8 +26,8 @@ log_file = f"session_log_{st.session_state.session_id}"
 
 if "messages" not in st.session_state:
     st.session_state.messages = []
-if "ingested_file" not in st.session_state:
-    st.session_state.ingested_file = None
+if "ingested_files" not in st.session_state:
+    st.session_state.ingested_files = {}
 # Init confidence threshold to default
 if "confidence_threshold" not in st.session_state:
     st.session_state.confidence_threshold = 0.7
@@ -41,33 +42,41 @@ if "chunk_overlap" not in st.session_state:
 if "model" not in st.session_state:
     st.session_state.model = GEMINI_MODEL_LLM
 if "num_chunks" not in st.session_state:
-    st.session_state.num_chunks=10
+    st.session_state.num_chunks=0
 if "model_embed" not in st.session_state:
     st.session_state.model_embed= GEMINI_MODEL_EMBEDDING
 
-st.caption(f"Loaded PDF: {st.session_state.ingested_file}, Number Chunks: {st.session_state.num_chunks}")
+st.caption(f"Loaded Files: {list(st.session_state.ingested_files.keys())}, Number Chunks: {st.session_state.num_chunks}")
 
 @st.dialog("Upload Files")
 def upload_dialog():
-    uploaded = st.file_uploader("Choose a PDF", type="pdf")
+    uploaded_files = st.file_uploader("Choose PDF(s) or HTML(s)", type=["pdf", "html"], accept_multiple_files=True)
     if st.button("Done"):
-        if uploaded:
-            if st.session_state.ingested_file != uploaded.name:
-                with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp:
+        for uploaded in uploaded_files:
+            if uploaded.name not in st.session_state.ingested_files:
+                # Set the respective suffix
+                if uploaded.name.endswith(".pdf"):
+                    suffix = ".pdf"
+                elif uploaded.name.endswith(".html"):
+                    suffix = ".html"
+
+                with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp:
                     tmp.write(uploaded.read())
                     tmp_path = tmp.name
-                with st.spinner("Ingesting PDF..."):
+                with st.spinner(f"Ingesting {uploaded.name}..."):
                     num_chunks = create_embedding_index(tmp_path, chunk_size=st.session_state.chunk_size,
-                                           chunk_overlap=st.session_state.chunk_overlap, collection_name=collection_name, 
-                                           model_embed=st.session_state.model_embed)
-                st.session_state.ingested_file = uploaded.name
-                st.session_state.num_chunks = num_chunks
-            st.rerun()
+                                        chunk_overlap=st.session_state.chunk_overlap, collection_name=collection_name, 
+                                        model_embed=st.session_state.model_embed)
+                st.session_state.ingested_files[uploaded.name] = num_chunks
+                st.session_state.num_chunks += num_chunks
+        st.rerun()
 
 
-    if st.session_state.ingested_file:
+    if st.session_state.ingested_files:
         st.divider()
-        st.success(f"{st.session_state.ingested_file} has been uploaded and is ready!")
+        
+        for name, chunks in st.session_state.ingested_files.items():
+            st.success(f"📄 {name} — {chunks} chunks")
 
 reload_page = False
 
@@ -84,7 +93,7 @@ with col1:
                 help = "Retrieved chunks minimum relevance score, if higher, chunking model must be confident that chunk contains the answer"
             )
 
-            pdf_loaded = st.session_state.ingested_file is not None
+            pdf_loaded = len(st.session_state.ingested_files) > 0
 
             top_k_r = st.slider(
                 "Top K Retrieval", 1, max(2, st.session_state.num_chunks), disabled=not pdf_loaded,
@@ -125,8 +134,15 @@ with col1:
                 if (chunk_size != st.session_state.chunk_size) or (chunk_overlap 
                                                                    != st.session_state.chunk_overlap) or (embed_model
                                                                                                           != st.session_state.model_embed):
-                    st.session_state.ingested_file = None
+                    st.session_state.ingested_files = {}
                     reload_page = True
+
+                    # Delete chroma collection in case embeddings changed
+                    client = chromadb.PersistentClient(path="./chroma_db")
+                    try:
+                        client.delete_collection(collection_name)
+                    except:
+                        pass
 
                 st.session_state.confidence_threshold = confidence
                 st.session_state.top_k_retrieval = top_k_r
@@ -149,7 +165,13 @@ if st.session_state.get("settings_changed") == True:
 
 with col2:
     if st.button("Clear files"):
-        st.session_state.ingested_file = None
+        # Delete chroma collection in case embeddings changed
+        client = chromadb.PersistentClient(path="./chroma_db")
+        try:
+            client.delete_collection(collection_name)
+        except:
+            pass
+        st.session_state.ingested_files = {}
         st.session_state.num_chunks = 0
         st.rerun()
 
@@ -166,7 +188,7 @@ with chat_tab:
             st.markdown(message["content"])
 
     if prompt := st.chat_input("Ask about the financial report..."):
-        if not st.session_state.ingested_file:
+        if len(st.session_state.ingested_files) == 0:
             st.error("Please upload a PDF first.")
         else:
             with st.chat_message("user"):
@@ -238,7 +260,7 @@ with evaluation_tab:
     st.caption("Upload golden dataset in any format to evaluate the RAG system. Golden dataset can be of any question answer format.")
 
 
-    if not st.session_state.ingested_file:
+    if len(st.session_state.ingested_files) == 0:
         st.warning("Please upload PDF via 📁 Upload Files")
     else: 
         file_content = st.file_uploader("Upload Golden Dataset", type=["json", "csv", "txt"])

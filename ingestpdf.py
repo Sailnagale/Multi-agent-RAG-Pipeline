@@ -8,6 +8,8 @@ import json
 from config import GEMINI_MODEL_EMBEDDING, CHUNK_SIZE, CHUNK_OVERLAP
 from llm_model import use_embed
 
+from selectolax.parser import HTMLParser
+
 
 
 load_dotenv()
@@ -26,6 +28,27 @@ def pdf_load(path):
     return pages
 
 
+def html_load(path):
+    with open(path, "r", encoding="utf-8") as f:
+        html = f.read()
+    tree = HTMLParser(html)
+
+    # Remove the tags that selectolex may not remove
+    for tag in tree.css("script, style"):
+        tag.decompose()
+    text = tree.body.text(separator=" ", strip=True)
+    
+    # HTML is one big page, so we only get one "pages" but
+    # output list for consistency
+    pages = []
+    if text.strip():
+        pages.append({"page": 1, "text": text, "source": path})
+
+    print(f"Extracted text length: {len(text)} characters")
+    print(f"First 500 chars: {text[:500]}")
+    return pages
+
+
 # Cleans out the \n and chunks out the text into a list of chunks of clean processed text
 def chunking_text(pages, chunk_size=CHUNK_SIZE, overlap=CHUNK_OVERLAP):
     chunks = []
@@ -33,7 +56,7 @@ def chunking_text(pages, chunk_size=CHUNK_SIZE, overlap=CHUNK_OVERLAP):
         text = page["text"]
         words = text.split()
         for i in range(0, len(words), chunk_size - overlap):
-            chunk = " ".join(words[i:1 + chunk_size])
+            chunk = " ".join(words[i:i + chunk_size])
             if chunk.strip():
                 chunks.append({
                     "text": chunk,
@@ -47,8 +70,12 @@ def chunking_text(pages, chunk_size=CHUNK_SIZE, overlap=CHUNK_OVERLAP):
 
 
 
-def create_embedding_index(pdf_path, chunk_size=CHUNK_SIZE, chunk_overlap=CHUNK_OVERLAP, collection_name="financial_docs", model_embed=GEMINI_MODEL_EMBEDDING):
-    pages = pdf_load(pdf_path)
+def create_embedding_index(file_path, chunk_size=CHUNK_SIZE, chunk_overlap=CHUNK_OVERLAP, collection_name="financial_docs", model_embed=GEMINI_MODEL_EMBEDDING):
+    
+    if file_path.endswith(".pdf"):
+        pages = pdf_load(file_path)
+    elif file_path.endswith(".html"):
+        pages = html_load(file_path)
     print(f"{len(pages)} pages have been loaded\n")
 
     chunks = chunking_text(pages, chunk_size, chunk_overlap)
@@ -57,18 +84,19 @@ def create_embedding_index(pdf_path, chunk_size=CHUNK_SIZE, chunk_overlap=CHUNK_
     # Storing into chroma_db
     client = chromadb.PersistentClient(path="./chroma_db")
 
-    # Ensure fresh chroma_db collection every time
+    # For multiple pdfs / htmls to be uploaded, we either get or create, don't delete
     try:
-        client.delete_collection(collection_name)
+        collection = client.get_collection(collection_name)
     except:
-        pass
-    collection = client.create_collection(collection_name)
+        collection = client.create_collection(collection_name)
 
+    # Need to avoid colissions now so use filename + index
+    unique_name = os.path.basename(file_path)
     for i, chunk in enumerate(chunks):
         print(f"  Embedding chunk {i+1}/{len(chunks)}...", end="\r")
         embedding = use_embed(chunk["text"], model_embed) 
         collection.add(
-            ids=[f"chunk_{i}"],
+            ids=[f"{unique_name}_chunk_{i}"],
             embeddings=[embedding],
             documents=[chunk["text"]],
             metadatas=[{"page": chunk["page"], "source": chunk["source"]}]

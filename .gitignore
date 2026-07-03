@@ -4,3 +4,4 @@ __pycache__/
 *.pyc
 .env
 session_log_*.json
+convert_to_json.ipynb
