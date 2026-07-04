@@ -24,6 +24,17 @@ def use_model(prompt, model=GEMINI_MODEL_LLM):
             input=prompt
         )
         return response
+    elif (model == "gemma4:e4b"):
+        response = requests.post(
+            "http://localhost:11434/api/generate",
+            json={
+                "model": "gemma4:e4b",
+                "prompt": prompt,
+                "stream": False
+            }
+        )
+        print(response.json()["response"])
+        return response.json()
     
 def use_embed(prompt, model_embed=GEMINI_MODEL_EMBEDDING):
     if (model_embed == "gemini-embedding-001"):

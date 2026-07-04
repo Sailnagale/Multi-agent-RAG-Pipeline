@@ -7,4 +7,5 @@ session_log_*.json
 convert_to_json.ipynb
 docs/
 3mtest_set
-3mtest_set.jsom
+3mtest_set.json
+full_test.json

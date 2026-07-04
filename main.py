@@ -9,4 +9,4 @@ while True:
     if question.lower() == "quit":
         break
     answer = ask(question)
-    print(f"\GEMINI: {answer}\n")
+    print(f"\nLLM: {answer}\n")

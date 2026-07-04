@@ -9,14 +9,15 @@ from config import GEMINI_MODEL_LLM, TOP_K_RETRIEVAL, TOP_K_FINAL, CONFIDENCE_TH
 from llm_model import use_model
 
 
-def ask(question, confidence_threshold=CONFIDENCE_THRESHOLD, top_k_retrieval=TOP_K_FINAL, top_k_final=TOP_K_FINAL,
-        model_llm=GEMINI_MODEL_LLM, collection_name="financial_docs", log_name="monitor_log", model_embed=GEMINI_MODEL_EMBEDDING):
+def ask(question, confidence_threshold=CONFIDENCE_THRESHOLD, top_k_retrieval=TOP_K_RETRIEVAL, top_k_final=TOP_K_FINAL,
+        model_llm=GEMINI_MODEL_LLM, collection_name="financial_docs", log_name="monitor_log", model_embed=GEMINI_MODEL_EMBEDDING, 
+        reranking=True):
     
     # Time logging for retrieving chunks
     start_time_chunks = time.time()
     # Retrieve the relevant chunks
     chunks_and_scores = retrieve(question, confidence_threshold=confidence_threshold, top_k_retrieval=top_k_retrieval,
-                                  top_k_final=top_k_final, collection_name=collection_name, model_embed=model_embed)
+                                  top_k_final=top_k_final, collection_name=collection_name, model_embed=model_embed, reranking=reranking)
 
     chunks = chunks_and_scores[0]
 
@@ -53,7 +54,7 @@ def ask(question, confidence_threshold=CONFIDENCE_THRESHOLD, top_k_retrieval=TOP
         log_query(question, response.output_text, chunks, retrieval_time, generation_time, response.usage.total_input_tokens, 
               response.usage.total_output_tokens, log_name=log_name)
         return response.output_text
-    elif (model_llm == "qwen"):
+    else:
         log_query(question, response["response"], chunks, retrieval_time, generation_time, response["prompt_eval_count"], 
               response["eval_count"], log_name=log_name)
         return response["response"]

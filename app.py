@@ -44,7 +44,11 @@ if "model" not in st.session_state:
 if "num_chunks" not in st.session_state:
     st.session_state.num_chunks=0
 if "model_embed" not in st.session_state:
-    st.session_state.model_embed= GEMINI_MODEL_EMBEDDING
+    st.session_state.model_embed = GEMINI_MODEL_EMBEDDING
+if "model_judge" not in st.session_state:
+    st.session_state.model_judge = GEMINI_MODEL_LLM
+if "use_rerank" not in st.session_state:
+    st.session_state.use_rerank = True
 
 st.caption(f"Loaded Files: {list(st.session_state.ingested_files.keys())}, Number Chunks: {st.session_state.num_chunks}")
 
@@ -95,6 +99,14 @@ with col1:
 
             pdf_loaded = len(st.session_state.ingested_files) > 0
 
+            rerank = st.radio(
+                "Use re-ranking after K-NN retrieval",
+                options=[True, False], 
+                index=[True, False].index(st.session_state.use_rerank)
+            )
+
+            st.caption(f"Reranking: {st.session_state.use_rerank}")
+
             top_k_r = st.slider(
                 "Top K Retrieval", 1, max(2, st.session_state.num_chunks), disabled=not pdf_loaded,
                 help="How many K nearest neighbour clusters to pick"
@@ -105,7 +117,7 @@ with col1:
                 help="How many K nearest neighbour clusters to pick after reranking"
             )
             chunk_size = st.slider(
-                "Chunk Size (tokens)", 100, 1000, st.session_state.chunk_size, step=50,
+                "Chunk Size (words)", 100, 1000, st.session_state.chunk_size, step=50,
                 help="Size of each chunk"
             )
             chunk_overlap = st.slider(
@@ -117,14 +129,21 @@ with col1:
 
             gemini_model = st.selectbox(
                 "Model selection", 
-                ["gemini-2.5-flash", "qwen"],
-                index=["gemini-2.5-flash", "qwen"].index(st.session_state.model),
+                ["gemini-2.5-flash", "qwen", "gemma4:e4b"],
+                index=["gemini-2.5-flash", "qwen", "gemma4:e4b"].index(st.session_state.model),
                 help="Use gemini-2.5-flash for the website streamlit deployment, otherwise use QWEN if running locally with Ollama"
             )
 
             embed_model = st.selectbox(
                 "Embedding model selection",
                 ["gemini-embedding-001", "qwen3-embedding"]
+            )
+
+            model_judge = st.selectbox(
+                "Model judge selection", 
+                ["gemini-2.5-flash", "qwen", "gemma4:e4b"],
+                index=["gemini-2.5-flash", "qwen", "gemma4:e4b"].index(st.session_state.model_judge),
+                help="Ideally want to use a model judge different to the model selected"
             )
 
             submitted = st.form_submit_button("Apply Settings")
@@ -151,8 +170,10 @@ with col1:
                 st.session_state.chunk_overlap = chunk_overlap
                 st.session_state.model = gemini_model
                 st.session_state.model_embed = embed_model
-                
+                st.session_state.model_judge = model_judge
+                st.session_state.use_rerank = rerank
                 st.session_state.settings_changed = True
+
 
 
 if st.session_state.get("settings_changed") == True:
@@ -183,27 +204,32 @@ with col3:
 chat_tab, stats_tab, evaluation_tab = st.tabs(["💬 Chat", "📊 Stats", "🤔 Evaluation"])        
 
 with chat_tab:
-    for message in st.session_state.messages:
-        with st.chat_message(message["role"]):
-            st.markdown(message["content"])
+    # Use container to get rid of render bug
+    messages_container = st.container()
+
+    with messages_container:
+        for message in st.session_state.messages:
+            with st.chat_message(message["role"]):
+                st.markdown(message["content"])
 
     if prompt := st.chat_input("Ask about the financial report..."):
         if len(st.session_state.ingested_files) == 0:
             st.error("Please upload a PDF first.")
         else:
-            with st.chat_message("user"):
-                st.markdown(prompt)
-            st.session_state.messages.append({"role": "user", "content": prompt})
+            with messages_container:
+                with st.chat_message("user"):
+                    st.markdown(prompt)
+                st.session_state.messages.append({"role": "user", "content": prompt})
 
-            with st.chat_message("assistant"):
-                with st.spinner("Thinking..."):
-                    answer = ask(prompt, st.session_state.confidence_threshold, 
-                                 st.session_state.top_k_retrieval, st.session_state.top_k_final, 
-                                 st.session_state.model, collection_name=collection_name, 
-                                 log_name=log_file, model_embed=st.session_state.model_embed
-                                 )
-                st.markdown(answer)
-            st.session_state.messages.append({"role": "assistant", "content": answer})
+                with st.chat_message("assistant"):
+                    with st.spinner("Thinking..."):
+                        answer = ask(prompt, st.session_state.confidence_threshold, 
+                                     st.session_state.top_k_retrieval, st.session_state.top_k_final, 
+                                     st.session_state.model, collection_name=collection_name, 
+                                     log_name=log_file, model_embed=st.session_state.model_embed, reranking=st.session_state.use_rerank
+                                     )
+                    st.markdown(answer)
+                st.session_state.messages.append({"role": "assistant", "content": answer})
 
 with stats_tab:
     st.subheader("RAG statistics")
@@ -285,7 +311,8 @@ with evaluation_tab:
                             golden_dataset, confidence_threshold=st.session_state.confidence_threshold,
                             top_k_retrieval=st.session_state.top_k_retrieval, top_k_final=st.session_state.top_k_final,
                             model_llm=st.session_state.model, collection_name=collection_name,
-                            log_name=log_file, model_embed=st.session_state.model_embed
+                            log_name=log_file, model_embed=st.session_state.model_embed, model_judge=st.session_state.model_judge, 
+                            reranking=st.session_state.use_rerank
                         )
                     
                     c1, c2, c3 = st.columns(3)

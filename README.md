@@ -5,8 +5,9 @@
 Question-answering system that enables beginner investors to ask plain English questions about the financial statements of any company. To access, simply visit 
 
 ## Tech Stack
-- **LLM:** gemini-2.5-flash // gemini-2.5-flash-lite
-- **Embeddings:** gemini-embedding-001 (Via Gemini API)
+- **Python:** >= 3.12
+- **LLM:** gemini-2.5-flash // qwen2.5:7b
+- **Embeddings:** gemini-embedding-001 (Via Gemini API) // qwen3-embedding
 - **Vector Store:** ChromaDB
 - **PDF Parsing:** PyMuPDF
 - **Re-ranking:** Flashrank
@@ -55,5 +56,6 @@ streamlit run app.py
 - [X] Seamless switching betwen Gemini and local Ollama LLM for local testing
 - [X] Evaluation of a practical dataset to test retrieval accuracy
 - [X] Batching of embeddings rather than querying one-by-one
+- [X] Addition of rerank toggle for evaluation
 - [ ] Writeup of evaluation results and conclusions
  

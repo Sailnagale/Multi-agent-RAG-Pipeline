@@ -11,10 +11,11 @@ def parse_golden_dataset(file_content, model_llm=GEMINI_MODEL_LLM):
     prompt = f"""Extract all question and expected answer pairs from the content sent to you.
 
     STRICT RULES:
+    - There are questions that seem irrelevant to the others. DO NOT REMOVE IT.
+    - DO NOT say output anything other than the JSON FORMAT BELOW
     - Only extract pairs EXPLICITLY stated in the contnet
     - Do NOT generate, invent or infer any questions or answers
     - If no clear pairs exist, return an empty array []
-    - Even if the question seems irrelevant DO NOT remove it
 
     Ensure to use this EXACT JSON format and nothing else. 
     [
@@ -33,7 +34,7 @@ def parse_golden_dataset(file_content, model_llm=GEMINI_MODEL_LLM):
 
     if (model_llm == "gemini-2.5-flash"):
         return json.loads(response.output_text.strip())
-    elif (model_llm == "qwen"):
+    else:
         return json.loads(response["response"].strip())
 
 
@@ -42,7 +43,7 @@ def parse_golden_dataset(file_content, model_llm=GEMINI_MODEL_LLM):
 def llm_as_judge(question, expected, answer, model_llm):
     # Prompt engineering
     prompt = f"""Please evaluate whether an AI assistant's answer includes the expected information. Please score the answer from 1-5,
-    where 1 means completely incorrect and missing the point, and 5 means correct, clear and extremely helpful information for a 
+    where 0 means completely incorrect and missing the point, and 5 means correct, clear and extremely helpful information for a 
     beginner investor.
 
     Question: {question}
@@ -60,14 +61,15 @@ def llm_as_judge(question, expected, answer, model_llm):
     if (model_llm == "gemini-2.5-flash"):
         print(f"LLM GRADES RESPONSE AS: {response.output_text}")
         return int(response.output_text.strip())
-    elif (model_llm == "qwen"):
+    else:
         print(f"LLM GRADES RESPONSE AS: {response["response"]}")
         return int(response["response"].strip())
 
 
 
 def evaluate(golden_dataset, confidence_threshold=CONFIDENCE_THRESHOLD, top_k_retrieval=TOP_K_RETRIEVAL, top_k_final=TOP_K_FINAL,
-        model_llm=GEMINI_MODEL_LLM, collection_name="financial_docs", log_name="monitor_log", model_embed=GEMINI_MODEL_EMBEDDING):
+        model_llm=GEMINI_MODEL_LLM, collection_name="financial_docs", log_name="monitor_log", model_embed=GEMINI_MODEL_EMBEDDING, 
+        model_judge=GEMINI_MODEL_LLM, reranking=True):
     
 
     results = []
@@ -83,12 +85,16 @@ def evaluate(golden_dataset, confidence_threshold=CONFIDENCE_THRESHOLD, top_k_re
 
         print(f"Question: {question}")
         answer = ask(question, confidence_threshold, top_k_retrieval, top_k_final, model_llm, 
-                     collection_name=collection_name, log_name=log_name, model_embed=model_embed)
+                     collection_name=collection_name, log_name=log_name, model_embed=model_embed, reranking=reranking)
         print(f"Answer: {answer}")
 
         
-        score += llm_as_judge(question, expected, answer, model_llm)
-        total_score += score
+        # If we don't even parse into llm why bother putting it into the judge by llm?
+        if "Could not find relevant information in document to answer question" not in answer:
+            score += llm_as_judge(question, expected, answer, model_judge)
+            total_score += score
+        else:
+            print("Automatic 0")
 
 
         # Each instance of the test
