@@ -91,7 +91,7 @@ ollama pull qwen3-embedding
 Then select the local models in the app's Options menu. Note: local models are
 only available when running the app locally — the Streamlit Cloud deployment
 supports the Gemini models only.
-```
+
 
 ## Workings of each py file
 
