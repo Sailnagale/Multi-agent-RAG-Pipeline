@@ -2,7 +2,7 @@
 
 ![Demo — upload a filing and ask questions](demo_final.gif)
 
-**[Website deployment](https://sieduckfinancialrag.streamlit.app/)**
+**[Website deployment](https://sieduckfinancialrag.streamlit.app/)** *Due to API constraints, please stick to the files in demonstration_files OR an equivalent of similar size or less*
 
 Question-answering system that enables beginner investors to ask plain English questions about the financial statements of any company. 
 
@@ -61,16 +61,36 @@ flowchart LR
 
 ## How to run locally
 
-1. Create .env file in directory and add gemini API key
+1. Copy `.env.example` to `.env` and add your Gemini API key:
+```
+GEMINI_API_KEY=your_key_here
+```
 
 2. Install dependencies:
 ```bash
 pip install -r requirements.txt
 ```
 
-3. Run app.py
+3. Run the app:
 ```bash
 streamlit run app.py
+```
+
+### Optional: running with local models (Ollama)
+
+The Gemini models work out of the box with an API key. To instead use the local
+models available in the model dropdown (gemma4:e4b, qwen2.5:7b, qwen3-embedding),
+you need [Ollama](https://ollama.com/download) installed and running:
+
+```bash
+ollama pull gemma4:e4b
+ollama pull qwen2.5:7b
+ollama pull qwen3-embedding
+```
+
+Then select the local models in the app's Options menu. Note: local models are
+only available when running the app locally — the Streamlit Cloud deployment
+supports the Gemini models only.
 ```
 
 ## Workings of each py file
