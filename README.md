@@ -2,12 +2,12 @@
 
 **[Website deployment](https://sieduckfinancialrag.streamlit.app/)**
 
-Question-answering system that enables beginner investors to ask plain English questions about the financial statements of any company. To access, simply visit 
+Question-answering system that enables beginner investors to ask plain English questions about the financial statements of any company. 
 
 ## Evaluation results
 
 Evaluated on a 20-question subset of [FinanceBench](https://github.com/patronus-ai/financebench)
-spanning four 10-K filings (AMD, American Express, Boeing, PepsiCo FY2022), plus one
+spanning four 10-K filings (AMD, American Express, Boeing, PepsiCo FY2022), plus one custom
 out-of-scope abstention question. Answers scored 1–5 by an LLM judge (a different
 model from the generator, to reduce self-evaluation bias).
 
@@ -31,10 +31,27 @@ model from the generator, to reduce self-evaluation bias).
 
 Full methodology, per-question results, and limitations: **[EVALUATION.md](EVALUATION.md)**
 
+## How it works
+```mermaid
+flowchart LR
+    A["PDF / HTML filing"] --> B["PyMuPDF parsing"]
+    B --> C["Word-based chunking with overlap"]
+    C --> D["Embedding"]
+    D --> E[("ChromaDB")]
+
+    Q["User question"] --> R["KNN retrieval"]
+    E --> R
+
+    R --> S["FlashRank rerank<br/>Top-5 + confidence threshold<br/>(optional)"]
+    S --> G["LLM generation"]
+    G --> ANS["Plain English answer"]
+```
+
+
 ## Tech Stack
 - **Python:** >= 3.12
-- **LLM:** gemini-2.5-flash // qwen2.5:7b
-- **Embeddings:** gemini-embedding-001 (Via Gemini API) // qwen3-embedding
+- **LLM:** gemini-2.5-flash // (LOCALLY qwen2.5:7b OR gemma4:e4b)
+- **Embeddings:** gemini-embedding-001  // (LOCALLY qwen3-embedding)
 - **Vector Store:** ChromaDB
 - **PDF Parsing:** PyMuPDF
 - **Re-ranking:** Flashrank
@@ -63,7 +80,7 @@ streamlit run app.py
 5. **app.py** - Streamlit UI interface for the entire application
 6. **prodmonitoring.py** - Retrieves statistics regarding generation and saves them into 'monitor_log.json'
 7. **config.py** - Default settings for model
-
+8. **llm_model.py** - Stores the LLM API calls, allowing for easy implementation of new LLM models
 
 ## Roadmap
 ### Phase One
@@ -80,7 +97,7 @@ streamlit run app.py
 
 ### Phase Two
 - [ ] Incorporate demonstration screenshots
-- [X] Seamless switching betwen Gemini and local Ollama LLM for local testing
+- [X] Seamless switching between Gemini and local Ollama LLM for local testing
 - [X] Evaluation of a practical dataset to test retrieval accuracy
 - [X] Batching of embeddings rather than querying one-by-one
 - [X] Addition of rerank toggle for evaluation
