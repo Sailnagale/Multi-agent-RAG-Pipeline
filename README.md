@@ -98,7 +98,7 @@ streamlit run app.py
 - [X] Deploy to Streamlit Cloud
 
 ### Phase Two
-- [ ] Incorporate demonstration screenshots
+- [X] Incorporate demonstration screenshots (GIF)
 - [X] Seamless switching between Gemini and local Ollama LLM for local testing
 - [X] Evaluation of a practical dataset to test retrieval accuracy
 - [X] Batching of embeddings rather than querying one-by-one
