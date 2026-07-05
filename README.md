@@ -1,6 +1,6 @@
 # Financial Report RAG
 
-![Demo — upload a filing and ask questions](demo.gif)
+![Demo — upload a filing and ask questions](demo_final.gif)
 
 **[Website deployment](https://sieduckfinancialrag.streamlit.app/)**
 
