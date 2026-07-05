@@ -14,7 +14,8 @@ def use_model(prompt, model=GEMINI_MODEL_LLM):
             json={
                 "model": "qwen2.5:7b",
                 "prompt": prompt,
-                "stream": False
+                "stream": False,
+                "keep_alive": "30m"
             }
         )
         return response.json()
@@ -30,10 +31,12 @@ def use_model(prompt, model=GEMINI_MODEL_LLM):
             json={
                 "model": "gemma4:e4b",
                 "prompt": prompt,
-                "stream": False
+                "stream": False, 
+                "keep_alive": "30m",
+                "options": {"num_ctx": 8192, "temperature": 0}
             }
         )
-        print(response.json()["response"])
+        print(response.json())
         return response.json()
     
 def use_embed(prompt, model_embed=GEMINI_MODEL_EMBEDDING):

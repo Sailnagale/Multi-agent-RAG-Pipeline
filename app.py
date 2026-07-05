@@ -107,9 +107,12 @@ with col1:
 
             st.caption(f"Reranking: {st.session_state.use_rerank}")
 
+            # Set a logical maximum k to be 100
+            max_k = min(100, max(2, st.session_state.num_chunks))
+
             top_k_r = st.slider(
-                "Top K Retrieval", 1, max(2, st.session_state.num_chunks), disabled=not pdf_loaded,
-                help="How many K nearest neighbour clusters to pick"
+                "Top K Retrieval", 1, max_k, disabled=not pdf_loaded,
+                help="How many K nearest neighbour clusters to pick", step=1
             )
             top_k_f = st.slider(
                 "Top K Final (after reranking)", 1, 
