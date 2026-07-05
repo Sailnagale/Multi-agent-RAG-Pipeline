@@ -1,5 +1,7 @@
 # Financial Report RAG
 
+![Demo — upload a filing and ask questions](demo.gif)
+
 **[Website deployment](https://sieduckfinancialrag.streamlit.app/)**
 
 Question-answering system that enables beginner investors to ask plain English questions about the financial statements of any company. 
