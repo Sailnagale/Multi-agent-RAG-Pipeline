@@ -1,4 +1,4 @@
-import fitz
+import pymupdf as fitz
 import chromadb
 import requests
 from google import genai
@@ -7,8 +7,7 @@ from dotenv import load_dotenv
 import json
 from config import GEMINI_MODEL_EMBEDDING, CHUNK_SIZE, CHUNK_OVERLAP, BATCH_SIZE
 from llm_model import use_embed
-
-from selectolax.parser import HTMLParser
+from selectolax.lexbor import LexborHTMLParser
 
 
 
@@ -31,7 +30,7 @@ def pdf_load(path):
 def html_load(path):
     with open(path, "r", encoding="utf-8") as f:
         html = f.read()
-    tree = HTMLParser(html)
+    tree = LexborHTMLParser(html)
 
     # Remove the tags that selectolex may not remove
     for tag in tree.css("script, style"):

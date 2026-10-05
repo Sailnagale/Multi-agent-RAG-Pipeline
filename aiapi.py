@@ -50,7 +50,7 @@ def ask(question, confidence_threshold=CONFIDENCE_THRESHOLD, top_k_retrieval=TOP
 
     generation_time = time.time() - start_time_llm
 
-    if (model_llm == "gemini-2.5-flash"):
+    if (model_llm == "gemini-3.8-flash"):
         log_query(question, response.output_text, chunks, retrieval_time, generation_time, response.usage.total_input_tokens, 
               response.usage.total_output_tokens, log_name=log_name)
         return response.output_text

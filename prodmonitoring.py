@@ -1,9 +1,12 @@
 import json
 import time
 from datetime import datetime
-
+from config import LOG_FILE
 
 def log_query(question, answer, chunks, retrieval_time, generation_time, input_tokens, output_tokens, log_name="monitor_log"):
+    """Log a query and its metadata to the monitor log file.
+    The log is written to the path defined by LOG_FILE (outside the watched project directory).
+    """
     json_entry = {
         "timestamp": datetime.now().isoformat(),
         "question": question,
@@ -16,14 +19,15 @@ def log_query(question, answer, chunks, retrieval_time, generation_time, input_t
         "output_tokens": output_tokens,
     }
 
-    # Check if log file already exists
+    # Load existing log if present
     try:
-        with open(f"{log_name}.json") as f:
+        with open(LOG_FILE, "r") as f:
             log = json.load(f)
-    except:
+    except Exception:
         log = []
 
     log.append(json_entry)
 
-    with open(f"{log_name}.json", "w") as f:
-        json.dump(log, f, indent=1)
+    # Write back to LOG_FILE
+    with open(LOG_FILE, "w") as f:
+        json.dump(log, f, indent=1)

@@ -132,20 +132,20 @@ with col1:
 
             gemini_model = st.selectbox(
                 "Model selection", 
-                ["gemini-2.5-flash", "qwen", "gemma4:e4b"],
-                index=["gemini-2.5-flash", "qwen", "gemma4:e4b"].index(st.session_state.model),
-                help="Use gemini-2.5-flash for the website streamlit deployment, otherwise use QWEN if running locally with Ollama"
+                ["gemini-3.8-flash", "qwen", "gemma4:e4b"],
+                index=["gemini-3.8-flash", "qwen", "gemma4:e4b"].index(st.session_state.model),
+                help="Use gemini-3.8-flash for the website streamlit deployment, otherwise use QWEN if running locally with Ollama"
             )
 
             embed_model = st.selectbox(
                 "Embedding model selection",
-                ["gemini-embedding-001", "qwen3-embedding"]
+                ["gemini-embedding-001", "nomic-embed-text"]
             )
 
             model_judge = st.selectbox(
                 "Model judge selection", 
-                ["gemini-2.5-flash", "qwen", "gemma4:e4b"],
-                index=["gemini-2.5-flash", "qwen", "gemma4:e4b"].index(st.session_state.model_judge),
+                ["gemini-3.8-flash", "qwen", "gemma4:e4b"],
+                index=["gemini-3.8-flash", "qwen", "gemma4:e4b"].index(st.session_state.model_judge),
                 help="Ideally want to use a model judge different to the model selected"
             )
 

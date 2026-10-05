@@ -32,7 +32,7 @@ def parse_golden_dataset(file_content, model_llm=GEMINI_MODEL_LLM):
 
     response = use_model(prompt, model_llm)
 
-    if (model_llm == "gemini-2.5-flash"):
+    if (model_llm == "gemini-3.8-flash"):
         return json.loads(response.output_text.strip())
     else:
         return json.loads(response["response"].strip())
@@ -58,7 +58,7 @@ def llm_as_judge(question, expected, answer, model_llm):
 
     response = use_model(prompt, model_llm)
 
-    if (model_llm == "gemini-2.5-flash"):
+    if (model_llm == "gemini-3.8-flash"):
         print(f"LLM GRADES RESPONSE AS: {response.output_text}")
         return int(response.output_text.strip())
     else:
