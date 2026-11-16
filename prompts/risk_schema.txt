@@ -1,0 +1,26 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "RiskAgentResult",
+  "type": "object",
+  "properties": {
+    "summary": {"type": "string"},
+    "risks": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "title": {"type": "string"},
+          "description": {"type": "string"},
+          "risk_level": {"type": "string"},
+          "mitigation": {"type": ["string", "null"]},
+          "page": {"type": "integer"}
+        },
+        "required": ["title", "description", "risk_level", "page"]
+      }
+    },
+    "overall_risk": {"type": "string"},
+    "cited_pages": {"type": "array", "items": {"type": "integer"}},
+    "agent": {"type": "string", "const": "Risk Agent"}
+  },
+  "required": ["summary", "risks", "overall_risk", "cited_pages", "agent"]
+}

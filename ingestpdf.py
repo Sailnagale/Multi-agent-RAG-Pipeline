@@ -5,8 +5,9 @@ from google import genai
 import os
 from dotenv import load_dotenv
 import json
-from config import GEMINI_MODEL_EMBEDDING, CHUNK_SIZE, CHUNK_OVERLAP, BATCH_SIZE
+from config import GEMINI_MODEL_EMBEDDING, CHUNK_SIZE, CHUNK_OVERLAP, BATCH_SIZE, CHROMA_PATH, TARGET_EMBEDDING_DIM
 from llm_model import use_embed
+from chroma_migration import migrate_collection_if_needed, get_collection_dimension, migrate_collection
 from selectolax.lexbor import LexborHTMLParser
 
 
@@ -81,13 +82,15 @@ def create_embedding_index(file_path, chunk_size=CHUNK_SIZE, chunk_overlap=CHUNK
     print(f"{len(chunks)} chunks have been created\n")
 
     # Storing into chroma_db
-    client = chromadb.PersistentClient(path="./chroma_db")
+    client = chromadb.PersistentClient(path=CHROMA_PATH)
 
-    # For multiple pdfs / htmls to be uploaded, we either get or create, don't delete
-    try:
-        collection = client.get_collection(collection_name)
-    except:
-        collection = client.create_collection(collection_name)
+    # Safe collection initialization with target dimension
+    collection = migrate_collection_if_needed(
+        client=client,
+        collection_name=collection_name,
+        target_model=model_embed,
+        target_dim=TARGET_EMBEDDING_DIM
+    )
 
     # Need to avoid colissions now so use filename + index
     unique_name = os.path.basename(file_path)

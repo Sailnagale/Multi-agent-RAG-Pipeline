@@ -9,7 +9,8 @@ from typing import List, Optional, Dict, Any
 
 from fastapi import FastAPI, UploadFile, File, Form, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, StreamingResponse
+import concurrent.futures
 from pydantic import BaseModel
 
 from config import (
@@ -23,9 +24,10 @@ from config import (
     CONFIDENCE_THRESHOLD,
     LOG_FILE,
     INDUSTRIES,
-    HISTORY_FILE
+    HISTORY_FILE,
+    CHROMA_PATH
 )
-from ingestpdf import create_embedding_index, pdf_load, html_load
+from ingestpdf import create_embedding_index, pdf_load, html_load, chunking_text
 from ragretrieve import retrieve
 from aiapi import ask
 from prodmonitoring import log_query
@@ -41,12 +43,33 @@ from agents import (
 )
 import chromadb
 
+# In-memory store for document extraction previews
+DOC_PREVIEWS: Dict[str, Any] = {}
+
 # Initialize FastAPI App
 app = FastAPI(
     title="Financial Report RAG & Multi-Agent Intelligence API",
     description="Backend API powering the 5-Agent Financial Analysis Platform",
     version="2.0.0"
 )
+
+from chroma_migration import migrate_all_collections, migrate_collection_if_needed
+
+@app.on_event("startup")
+def startup_migration_check():
+    """
+    Checks all ChromaDB collections on startup:
+    Auto-aligns any collections with legacy 384 dimensions to 3072 dimensions matching Gemini.
+    Skips collections that are already 3072 dimensions without unnecessary regeneration.
+    """
+    print("--> [Startup] Checking ChromaDB collection embedding dimensions...")
+    try:
+        summary = migrate_all_collections()
+        migrated_count = len(summary.get("migrated", []))
+        skipped_count = len(summary.get("skipped", []))
+        print(f"--> [Startup] ChromaDB dimension alignment check complete: {migrated_count} migrated to 3072, {skipped_count} already matching.")
+    except Exception as e:
+        print(f"--> [Startup] ChromaDB migration check warning: {e}")
 
 # Enable CORS for React development and production
 app.add_middleware(
@@ -138,7 +161,7 @@ def health_check():
     ollama_models = []
     try:
         import requests
-        r = requests.get("http://localhost:11434/api/tags", timeout=2)
+        r = requests.get("http://localhost:11434/api/tags", timeout=0.5)
         if r.status_code == 200:
             ollama_active = True
             ollama_models = [m.get("name") for m in r.json().get("models", [])]
@@ -156,17 +179,42 @@ def health_check():
     }
 
 
+from runtime_config import get as cfg_get, set_ as cfg_set, all as cfg_all
+
 @app.get("/api/config")
 def get_config():
     return {
-        "model_llm": GEMINI_MODEL_LLM,
-        "model_embed": GEMINI_MODEL_EMBEDDING,
+        "model_llm": cfg_get("LLM_MODEL") or GEMINI_MODEL_LLM,
+        "model_embed": cfg_get("EMBED_MODEL") or GEMINI_MODEL_EMBEDDING,
+        "llm_provider": cfg_get("LLM_PRIMARY_PROVIDER") or "ollama",
+        "embed_provider": cfg_get("EMBED_PRIMARY_PROVIDER") or "ollama",
         "confidence_threshold": CONFIDENCE_THRESHOLD,
         "top_k_retrieval": TOP_K_RETRIEVAL,
         "top_k_final": TOP_K_FINAL,
         "chunk_size": CHUNK_SIZE,
         "chunk_overlap": CHUNK_OVERLAP,
         "industries": INDUSTRIES
+    }
+
+@app.patch("/api/config")
+def patch_config(update: ConfigUpdateRequest):
+    if update.model_llm:
+        cfg_set("LLM_MODEL", update.model_llm)
+        if "gemini" in update.model_llm.lower():
+            cfg_set("LLM_PRIMARY_PROVIDER", "gemini")
+        elif "groq" in update.model_llm.lower() or "llama" in update.model_llm.lower():
+            cfg_set("LLM_PRIMARY_PROVIDER", "groq")
+        else:
+            cfg_set("LLM_PRIMARY_PROVIDER", "ollama")
+    if update.model_embed:
+        cfg_set("EMBED_MODEL", update.model_embed)
+        if "gemini" in update.model_embed.lower():
+            cfg_set("EMBED_PRIMARY_PROVIDER", "gemini")
+        else:
+            cfg_set("EMBED_PRIMARY_PROVIDER", "ollama")
+    return {
+        "status": "ok",
+        "config": get_config()
     }
 
 
@@ -227,16 +275,63 @@ async def upload_document(
             model_embed=model_embed
         )
 
+        # Compute RAG chunks & pages summary for instant preview
+        all_chunks = chunking_text(pages, chunk_size, chunk_overlap)
+        total_words = sum(len(p.get("text", "").split()) for p in pages)
+        total_chars = sum(len(p.get("text", "")) for p in pages)
+        
+        pages_summary = []
+        for p in pages:
+            p_text = p.get("text", "").strip()
+            pages_summary.append({
+                "page": p.get("page_number", 1),
+                "words": len(p_text.split()),
+                "char_count": len(p_text),
+                "snippet": (p_text[:160] + "...") if len(p_text) > 160 else p_text
+            })
+
+        chunks_preview = []
+        for idx, ch in enumerate(all_chunks):
+            ch_text = ch.get("text", "").strip()
+            chunks_preview.append({
+                "chunk_index": idx + 1,
+                "page": ch.get("page_number", 1),
+                "word_count": len(ch_text.split()),
+                "char_count": len(ch_text),
+                "snippet": (ch_text[:180] + "...") if len(ch_text) > 180 else ch_text,
+                "text": ch_text
+            })
+
+        preview_payload = {
+            "filename": file.filename,
+            "collection_name": collection_name,
+            "page_count": page_count,
+            "num_chunks": len(all_chunks),
+            "total_words": total_words,
+            "total_chars": total_chars,
+            "detected_company": detected_company,
+            "pages_summary": pages_summary,
+            "chunks_preview": chunks_preview[:120],  # first 120 chunks for ultra-fast frontend rendering
+            "sample_text": sample_text[:1200]
+        }
+        DOC_PREVIEWS[collection_name] = preview_payload
+
         return {
             "status": "success",
             "filename": file.filename,
             "collection_name": collection_name,
             "page_count": page_count,
-            "num_chunks": num_chunks,
+            "num_chunks": len(all_chunks),
+            "total_words": total_words,
+            "total_chars": total_chars,
             "detected_company": detected_company,
-            "message": f"Successfully ingested {file.filename}: {page_count} pages, {num_chunks} chunks indexed."
+            "pages_summary": pages_summary,
+            "chunks_preview": chunks_preview[:120],
+            "message": f"Successfully ingested {file.filename}: {page_count} pages, {len(all_chunks)} chunks indexed."
         }
     except Exception as e:
+        import traceback
+        traceback.print_exc()
         raise HTTPException(status_code=500, detail=f"Failed to ingest file: {str(e)}")
     finally:
         if os.path.exists(tmp_path):
@@ -246,44 +341,82 @@ async def upload_document(
                 pass
 
 
+@app.get("/api/document/preview/{collection_name}")
+def get_document_preview(collection_name: str):
+    """
+    Returns the RAG text and chunk extraction preview for any uploaded collection.
+    """
+    if collection_name in DOC_PREVIEWS:
+        return DOC_PREVIEWS[collection_name]
+    
+    # Fallback to querying ChromaDB directly if collection exists in Chroma
+    try:
+        client = chromadb.PersistentClient(path=CHROMA_PATH)
+        col = client.get_collection(collection_name)
+        data = col.get(limit=100, include=["documents", "metadatas"])
+        docs = data.get("documents", [])
+        metas = data.get("metadatas", [])
+        chunks_preview = []
+        for i, (doc, meta) in enumerate(zip(docs, metas)):
+            chunks_preview.append({
+                "chunk_index": i + 1,
+                "page": meta.get("page", 1) if meta else 1,
+                "word_count": len(doc.split()),
+                "char_count": len(doc),
+                "snippet": (doc[:180] + "...") if len(doc) > 180 else doc,
+                "text": doc
+            })
+        return {
+            "collection_name": collection_name,
+            "page_count": max([c["page"] for c in chunks_preview], default=1),
+            "num_chunks": len(chunks_preview),
+            "total_words": sum(c["word_count"] for c in chunks_preview),
+            "total_chars": sum(c["char_count"] for c in chunks_preview),
+            "chunks_preview": chunks_preview
+        }
+    except Exception as e:
+        raise HTTPException(status_code=404, detail=f"Preview not available: {str(e)}")
+
+
 @app.post("/api/analyze")
 def analyze_report(req: AnalyzeRequest):
     """
-    Executes the 5 Specialized Agents:
+    Executes the 5 Specialized Agents in parallel:
     1. Positive Agent (strengths, growth, opportunities)
     2. Negative Agent (weaknesses, warning signs, negative indicators)
     3. Neutral Agent (unbiased evidence-based summary)
     4. Financial Agent (revenue, profit, margins, debt, cash flow, financial ratios)
     5. Risk Agent (financial, operational, market, regulatory risks)
-    Plus Overall Company Analysis & Financial Visualizations linked to AI explanations and page references.
+    Plus Overall Company Analysis & Instant Financial Visualizations from extracted metrics.
     """
     start_time = time.time()
+    active_llm = req.model_llm or cfg_get("LLM_MODEL") or GEMINI_MODEL_LLM
+    active_embed = req.model_embed or cfg_get("EMBED_MODEL") or GEMINI_MODEL_EMBEDDING
     config_params = {
         "confidence_threshold": req.confidence_threshold,
         "top_k_retrieval": req.top_k_retrieval,
         "top_k_final": req.top_k_final,
-        "model_llm": req.model_llm,
-        "model_embed": req.model_embed,
+        "model_llm": active_llm,
+        "model_embed": active_embed,
         "collection_name": req.collection_name,
         "reranking": req.reranking
     }
 
     try:
-        # Run 5 Agents
-        print(f"--> Running Positive Agent for {req.company_name}...")
-        positive_res = run_positive_agent(req.company_name, req.industry, req.collection_name, config_params)
+        # Run 5 Agents concurrently in parallel using ThreadPoolExecutor
+        print(f"--> Executing all 5 Specialized Agents in parallel for {req.company_name}...")
+        with concurrent.futures.ThreadPoolExecutor(max_workers=5) as executor:
+            fut_pos = executor.submit(run_positive_agent, req.company_name, req.industry, req.collection_name, config_params)
+            fut_neg = executor.submit(run_negative_agent, req.company_name, req.industry, req.collection_name, config_params)
+            fut_neu = executor.submit(run_neutral_agent, req.company_name, req.industry, req.collection_name, config_params)
+            fut_fin = executor.submit(run_financial_agent, req.company_name, req.industry, req.collection_name, config_params)
+            fut_risk = executor.submit(run_risk_agent, req.company_name, req.industry, req.collection_name, config_params)
 
-        print(f"--> Running Negative Agent for {req.company_name}...")
-        negative_res = run_negative_agent(req.company_name, req.industry, req.collection_name, config_params)
-
-        print(f"--> Running Neutral Agent for {req.company_name}...")
-        neutral_res = run_neutral_agent(req.company_name, req.industry, req.collection_name, config_params)
-
-        print(f"--> Running Financial Agent for {req.company_name}...")
-        financial_res = run_financial_agent(req.company_name, req.industry, req.collection_name, config_params)
-
-        print(f"--> Running Risk Agent for {req.company_name}...")
-        risk_res = run_risk_agent(req.company_name, req.industry, req.collection_name, config_params)
+            positive_res = fut_pos.result()
+            negative_res = fut_neg.result()
+            neutral_res = fut_neu.result()
+            financial_res = fut_fin.result()
+            risk_res = fut_risk.result()
 
         # Run Overall Synthesis
         agent_bundle = {
@@ -294,11 +427,14 @@ def analyze_report(req: AnalyzeRequest):
             "risk": risk_res
         }
         print(f"--> Running Overall Synthesis for {req.company_name}...")
-        overall_res = run_overall_synthesis(req.company_name, req.industry, agent_bundle, model_llm=req.model_llm)
+        overall_res = run_overall_synthesis(req.company_name, req.industry, agent_bundle, model_llm=active_llm)
 
-        # Extract Financial Visualizations
-        print(f"--> Extracting Structured Financial Visualizations for {req.company_name}...")
-        charts_res = extract_financial_visualizations(req.company_name, req.industry, req.collection_name, config_params)
+        # Extract Financial Visualizations instantly from Financial Agent findings (no slow LLM / image generation calls)
+        print(f"--> Formatting Structured Financial Visualizations for {req.company_name}...")
+        charts_res = extract_financial_visualizations(
+            req.company_name, req.industry, req.collection_name, config_params,
+            financial_res=financial_res
+        )
 
         total_duration = round(time.time() - start_time, 2)
 
@@ -325,14 +461,106 @@ def analyze_report(req: AnalyzeRequest):
         }
 
         # Persist to history
-        history = _load_history()
-        history.insert(0, analysis_record)
-        _save_history(history)
+        try:
+            history = _load_history()
+            history.insert(0, analysis_record)
+            _save_history(history)
+        except Exception as eh:
+            print(f"Error saving history record: {eh}")
 
         return analysis_record
 
     except Exception as e:
+        import traceback
+        traceback.print_exc()
         raise HTTPException(status_code=500, detail=f"Analysis failed: {str(e)}")
+
+
+@app.post("/api/analyze/stream")
+def analyze_report_stream(req: AnalyzeRequest):
+    """
+    Streams the 5 specialized agents progressively using Server-Sent Events (SSE).
+    Emits events as soon as each agent produces its output, then streams visualizations,
+    synthesis, and the final combined analysis record.
+    """
+    def event_generator():
+        start_time = time.time()
+        active_llm = req.model_llm or cfg_get("LLM_MODEL") or GEMINI_MODEL_LLM
+        active_embed = req.model_embed or cfg_get("EMBED_MODEL") or GEMINI_MODEL_EMBEDDING
+        config_params = {
+            "confidence_threshold": req.confidence_threshold,
+            "top_k_retrieval": req.top_k_retrieval,
+            "top_k_final": req.top_k_final,
+            "model_llm": active_llm,
+            "model_embed": active_embed,
+            "collection_name": req.collection_name,
+            "reranking": req.reranking
+        }
+
+        # 1. Emit start event
+        yield f"data: {json.dumps({'type': 'start', 'company': req.company_name, 'message': 'Starting multi-agent analysis...'})}\n\n"
+
+        agent_results = {}
+        # Run 5 agents concurrently and emit outputs as soon as each completes
+        with concurrent.futures.ThreadPoolExecutor(max_workers=5) as executor:
+            future_to_agent = {
+                executor.submit(run_positive_agent, req.company_name, req.industry, req.collection_name, config_params): "positive",
+                executor.submit(run_negative_agent, req.company_name, req.industry, req.collection_name, config_params): "negative",
+                executor.submit(run_neutral_agent, req.company_name, req.industry, req.collection_name, config_params): "neutral",
+                executor.submit(run_financial_agent, req.company_name, req.industry, req.collection_name, config_params): "financial",
+                executor.submit(run_risk_agent, req.company_name, req.industry, req.collection_name, config_params): "risk",
+            }
+
+            for future in concurrent.futures.as_completed(future_to_agent):
+                agent_name = future_to_agent[future]
+                try:
+                    res = future.result()
+                    agent_results[agent_name] = res
+                    # Immediately yield completed agent result to client!
+                    yield f"data: {json.dumps({'type': 'agent_complete', 'agent': agent_name, 'data': res})}\n\n"
+                except Exception as e:
+                    print(f"Error in {agent_name} agent: {e}")
+                    agent_results[agent_name] = {"summary": f"Completed with fallback {agent_name} analysis.", "findings": []}
+                    yield f"data: {json.dumps({'type': 'agent_complete', 'agent': agent_name, 'data': agent_results[agent_name]})}\n\n"
+
+        # 2. Extract financial visualizations (instant, deterministic)
+        charts_res = extract_financial_visualizations(
+            req.company_name, req.industry, req.collection_name, config_params,
+            financial_res=agent_results.get("financial")
+        )
+        yield f"data: {json.dumps({'type': 'visualizations_complete', 'data': charts_res})}\n\n"
+
+        # 3. Run Overall Synthesis
+        overall_res = run_overall_synthesis(req.company_name, req.industry, agent_results, model_llm=active_llm)
+        yield f"data: {json.dumps({'type': 'overall_complete', 'data': overall_res})}\n\n"
+
+        total_duration = round(time.time() - start_time, 2)
+        analysis_id = f"analysis_{uuid.uuid4().hex[:10]}"
+        analysis_record = {
+            "id": analysis_id,
+            "company_name": req.company_name,
+            "industry": req.industry,
+            "report_date": req.report_date or datetime.now().strftime("%B %Y"),
+            "timestamp": datetime.now().isoformat(),
+            "collection_name": req.collection_name,
+            "duration_sec": total_duration,
+            "status": "Complete",
+            "overall": overall_res,
+            "agents": agent_results,
+            "visualizations": charts_res
+        }
+
+        # Persist to history
+        try:
+            history = _load_history()
+            history.insert(0, analysis_record)
+            _save_history(history)
+        except Exception:
+            pass
+
+        yield f"data: {json.dumps({'type': 'done', 'record': analysis_record})}\n\n"
+
+    return StreamingResponse(event_generator(), media_type="text/event-stream")
 
 
 @app.get("/api/history")

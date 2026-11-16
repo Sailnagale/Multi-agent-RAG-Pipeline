@@ -4,7 +4,7 @@ import os
 from ingestpdf import create_embedding_index
 from aiapi import ask
 import json
-from config import GEMINI_MODEL_LLM, CHUNK_SIZE, CHUNK_OVERLAP, TOP_K_RETRIEVAL, TOP_K_FINAL, CONFIDENCE_THRESHOLD, GEMINI_MODEL_EMBEDDING
+from config import GEMINI_MODEL_LLM, CHUNK_SIZE, CHUNK_OVERLAP, TOP_K_RETRIEVAL, TOP_K_FINAL, CONFIDENCE_THRESHOLD, GEMINI_MODEL_EMBEDDING, CHROMA_PATH
 import uuid
 from evaluate import parse_golden_dataset, evaluate
 import chromadb
@@ -160,7 +160,7 @@ with col1:
                     reload_page = True
 
                     # Delete chroma collection in case embeddings changed
-                    client = chromadb.PersistentClient(path="./chroma_db")
+                    client = chromadb.PersistentClient(path=CHROMA_PATH)
                     try:
                         client.delete_collection(collection_name)
                     except:
@@ -190,7 +190,7 @@ if st.session_state.get("settings_changed") == True:
 with col2:
     if st.button("Clear files"):
         # Delete chroma collection in case embeddings changed
-        client = chromadb.PersistentClient(path="./chroma_db")
+        client = chromadb.PersistentClient(path=CHROMA_PATH)
         try:
             client.delete_collection(collection_name)
         except:

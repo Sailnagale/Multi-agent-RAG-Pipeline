@@ -114,45 +114,174 @@ All prompts enforce **JSON‑only** output using a schema block (see `agents.py`
 ---
 
 ## Running the Project
-### Prerequisites
-- **Python 3.11+** (recommended via `pyenv` or Windows installer)
-- **Node.js 20+** and **npm** (or `pnpm`) for the React frontend
-- **Ollama** installed and running (`ollama serve`).
-- Pull the required models:
-  ```bash
-  ollama pull qwen2.5:3b
-  ollama pull all-minilm
-  ```
-- (Optional) Docker – the repo includes a `Dockerfile` for the backend if you prefer containerisation.
 
-### Setup Steps
-1. **Clone the repository** (already assumed in `c:\Promt Assignments\Promt CP`).
-2. **Backend**
+### 1. Prerequisites
+- **Python 3.11+** installed ([python.org](https://www.python.org/downloads/))
+- **Node.js 18+ or 20+** and **npm** ([nodejs.org](https://nodejs.org/))
+- **Ollama** installed for offline local inference ([ollama.com](https://ollama.com/))
+- *(Optional)* **Google Gemini API Key** and/or **Groq API Key** if you wish to use cloud LLMs alongside local Ollama models.
+
+---
+
+### 2. Environment Configuration (`.env`)
+Create or verify your `.env` file in the root project directory (`C:\Promt Assignments\Promt CP\.env`):
+
+```env
+# ── Local Ollama Setup (Default) ──────────────────────────
+OLLAMA_HOST=http://127.0.0.1:11434
+OLLAMA_MODEL_QWEN=qwen2.5:3b                # Default local LLM
+OLLAMA_MODEL_EMBED=all-minilm               # Default local embedding model
+
+# ── Optional: Google Gemini Cloud ────────────────────────
+GEMINI_API_KEY=your_gemini_api_key_here
+GEMINI_MODEL_LLM=gemini-1.5-flash
+GEMINI_MODEL_EMBED=gemini-embedding-001
+
+# ── Optional: Groq Cloud (High-speed inference) ─────────
+GROQ_API_KEY=your_groq_api_key_here
+GROQ_MODEL_LLM=openai/gpt-oss-120b
+
+# ── Active Provider Selection (ollama | gemini | groq) ───
+LLM_PRIMARY_PROVIDER=ollama
+EMBED_PRIMARY_PROVIDER=ollama
+ENABLE_PROVIDER_FAILOVER=true
+
+# ── Retrieval Parameters ─────────────────────────────────
+TOP_K_RETRIEVAL=10
+TOP_K_FINAL=5
+CONFIDENCE_THRESHOLD=0.0001
+```
+
+> **Note:** The Analyzer UI features a real-time 3-way toggle (**Ollama**, **Gemini**, **Groq**), so you can switch models at any time directly from the web interface without restarting the server!
+
+---
+
+### 3. Local Model Setup (Ollama)
+If using local models, start the Ollama service and pull the required lightweight models:
+
+```powershell
+# In PowerShell or Terminal:
+ollama serve
+
+# In a separate terminal tab, pull the default models:
+ollama pull qwen2.5:3b
+ollama pull all-minilm
+```
+
+---
+
+### 4. Backend Setup & Run (FastAPI)
+
+1. Open PowerShell / Command Prompt and navigate to the project root:
    ```powershell
    cd "C:\Promt Assignments\Promt CP"
-   python -m venv .venv
-   .\.venv\Scripts\activate
-   pip install -r requirements.txt
-   # Start FastAPI (no --reload to avoid unwanted restarts; you can use --reload now that logs are outside the source)
-   uvicorn server:app --host 127.0.0.1 --port 8000
    ```
-3. **Frontend**
-   ```powershell
-   cd frontend
-   npm install   # or pnpm install
-   npm run dev   # starts Vite dev server on http://localhost:5173
-   ```
-4. **Use the app**
-   - Open `http://localhost:5173`.
-   - Upload a PDF, select the industry, and click *Run Analysis*.
-   - View the step‑by‑step results, visualizations, and download the JSON report.
 
-### Testing
-Run the provided pytest suite (if any) with:
-```bash
-pytest tests/
+2. Create and activate a Python virtual environment:
+   ```powershell
+   # Windows PowerShell
+   python -m venv .venv
+   .\.venv\Scripts\Activate.ps1
+   ```
+   *(On Linux/macOS: `source .venv/bin/activate`)*
+
+3. Install required Python packages:
+   ```powershell
+   pip install -r requirements.txt
+   ```
+
+4. Start the FastAPI backend server:
+   ```powershell
+   uvicorn server:app --reload --host 127.0.0.1 --port 8000
+   ```
+   - **Backend API**: [http://127.0.0.1:8000](http://127.0.0.1:8000)
+   - **Interactive API Documentation (Swagger)**: [http://127.0.0.1:8000/docs](http://127.0.0.1:8000/docs)
+   - **System Health Check**: [http://127.0.0.1:8000/api/health](http://127.0.0.1:8000/api/health)
+   - **Runtime Config**: [http://127.0.0.1:8000/api/config](http://127.0.0.1:8000/api/config)
+
+---
+
+### 5. Frontend Setup & Run (React + Vite)
+
+1. Open a new terminal tab and navigate to the `frontend` folder:
+   ```powershell
+   cd "C:\Promt Assignments\Promt CP\frontend"
+   ```
+
+2. Install dependencies:
+   ```powershell
+   npm install
+   ```
+
+3. Launch the Vite development server:
+   ```powershell
+   npm run dev
+   ```
+   - **Frontend App URL**: [http://localhost:5173](http://localhost:5173)
+
+---
+
+### 6. Alternative: Production Build & Single-Port Serving
+You can also compile the React frontend for production. When built, FastAPI automatically serves the static assets on port 8000:
+
+```powershell
+# Build frontend
+cd "C:\Promt Assignments\Promt CP\frontend"
+npm run build
+
+# Start FastAPI server
+cd "C:\Promt Assignments\Promt CP"
+.\.venv\Scripts\Activate.ps1
+uvicorn server:app --host 127.0.0.1 --port 8000
 ```
-All tests should pass with the new logging locations.
+Open **[http://localhost:8000](http://localhost:8000)** directly in your browser.
+
+---
+
+### 7. Key Features & How to Use the App
+
+1. **Interactive Animated Minions & Cats Login Page**:
+   - Access by clicking **Log In** / **Switch Account** on the Dashboard or **Sign In** in the top navbar.
+   - **4 Minions & 3 Cats** (7 characters total) react dynamically:
+     - **Typing Email**: The squad's eyes follow your typing across the screen.
+     - **Entering Password**: The characters cover their eyes with their hands and paws, while Stuart, Otto, and the Tuxedo cat turn and look away to the left (`🙈 "We are NOT looking!"`).
+     - **Incorrect Password**: Enter an invalid password (or type `wrong`) and submit to watch the entire squad shake, cry real tears, and mourn the error.
+     - **Correct Password**: Enter a valid password (or click **Instant Demo Login**) to trigger confetti, balloons, and an animated celebration dance!
+
+2. **Executive Financial Dashboard**:
+   - Displays real-time portfolio KPIs (Companies Analyzed, Average Health Score, Sentiment Distribution, Coverage Stats).
+   - Filter and search past company reports, inspect full audit records, or click **New Company Analysis**.
+
+3. **3-Way Model & Engine Toggle (Ollama Local, Gemini Cloud, Groq Cloud)**:
+   - **Local Demonstration**: Ollama (`qwen2.5:3b` + `all-minilm`) for zero-cost offline demonstration.
+   - **Cloud Production**: **Google Gemini** (`gemini-1.5-flash` + `gemini-embedding-001`) and **Groq** (`openai/gpt-oss-120b`) for ultra-high throughput and accurate reasoning.
+   - Automatic multi-tier provider failover ensures zero 500 downtime even if an individual API quota or rate limit is encountered.
+
+4. **Live RAG Extracted Text & Chunks Preview**:
+   - Immediately upon uploading any 10-K, 10-Q, or PDF/HTML annual report, an interactive **RAG Extraction Preview** is rendered directly in the interface.
+   - **Real-Time KPIs**: Extracted Page Count, Total Chunks Indexed, Total Word Count, and Total Character Count.
+   - **Vector Chunk Inspector**: Filter chunks by page number, perform live full-text keyword searches across chunks, copy chunk snippets with one click, and inspect estimated token counts and full text in an inspection modal.
+   - **Extracted Page Reader**: Switch view mode to review raw parsed text page-by-page to verify parsing fidelity before triggering multi-agent analysis.
+
+5. **Executive Interactive Financial Visualizations**:
+   - 5 interactive analytical graphs with end-to-end audit traceability:
+     1. **Revenue & Profitability Growth Dynamics** (Multi-period revenue, gross profit, operating income, net income).
+     2. **Capital Structure & Solvency Health** (Cash & equivalents, commercial paper, long-term debt, total obligations).
+     3. **Profit Margin Efficiency Profile** (Gross, operating, EBITDA, and net profit margins).
+     4. **Cash Flow Generation & Capital Allocation** (Operating cash flow, CapEx, free cash flow, share repurchases & dividends).
+     5. **Segment & Product Contribution Breakdown** (Interactive donut pie chart and segmented contribution bars).
+   - **Interactive Chart Controls**: Switch chart visualization types on-the-fly (`Bar`, `Line`, `Area`).
+   - **Forensic Traceability**: Every chart includes AI forensic quantitative assessments, direct audited quotes from the filing, and clickable page reference badges.
+
+---
+
+### 8. Troubleshooting & Common Fixes
+- **Ollama Connection Error**: Ensure the Ollama background service is running (`ollama serve`) and the models are installed (`ollama list`).
+- **Port 8000 Already in Use**: Terminate previous uvicorn instances using PowerShell:
+  ```powershell
+  Get-Process | Where-Object { $_.ProcessName -match "uvicorn|python" } | Stop-Process -Force
+  ```
+- **Groq or Gemini API Key Missing**: Verify that your API keys in `.env` are set without quotes and have no duplicate keys. The system gracefully falls back to local Ollama if an API key is unconfigured.
 
 ---
 

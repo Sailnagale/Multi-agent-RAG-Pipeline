@@ -2,12 +2,27 @@
 # CONFIGURATION SETTINGS
 # ==========================================
 import os
-# Local Ollama Models (Default)
-GEMINI_MODEL_LLM = "qwen2.5:3b"
-GEMINI_MODEL_EMBEDDING = "all-minilm"
+import tempfile
+import shutil
+
+# Default Cloud & Local Models
+GEMINI_MODEL_LLM = "gemini-3.5-flash"
+GEMINI_MODEL_EMBEDDING = "gemini-embedding-001"
+TARGET_EMBEDDING_DIM = 3072
 
 # Secondary / Fallback Embedding Models
 FALLBACK_EMBEDDING_MODEL = "all-minilm"
+
+# Chroma storage path: store in system temp or designated external directory to prevent watchfiles reloader from restarting uvicorn during analysis
+CHROMA_PATH = os.environ.get("CHROMA_DB_PATH", os.path.join(tempfile.gettempdir(), "financial_rag_chroma_db"))
+
+# Automatically migrate existing local chroma_db if temp folder does not exist
+_local_chroma = os.path.abspath("./chroma_db")
+if os.path.exists(_local_chroma) and not os.path.exists(CHROMA_PATH):
+    try:
+        shutil.copytree(_local_chroma, CHROMA_PATH)
+    except Exception:
+        pass
 
 # Chunking setup
 CHUNK_SIZE = 500

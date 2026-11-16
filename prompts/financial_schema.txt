@@ -1,0 +1,14 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "FinancialAgentResult",
+  "type": "object",
+  "properties": {
+    "summary": {"type": "string"},
+    "key_metrics": {"type": "array"},
+    "analysis": {"type": "array"},
+    "confidence_rating": {"type": "string"},
+    "cited_pages": {"type": "array", "items": {"type": "integer"}},
+    "agent": {"type": "string", "const": "Financial Agent"}
+  },
+  "required": ["summary", "key_metrics", "analysis", "confidence_rating", "cited_pages", "agent"]
+}

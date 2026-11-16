@@ -232,10 +232,12 @@ export default function SettingsPage({ user, onUpdateUser }) {
                 className="input-field"
               >
                 <option value="qwen2.5:3b">qwen2.5:3b (Ollama Local - Recommended)</option>
-                <option value="gemini-3.8-flash">gemini-3.8-flash (Google GenAI Cloud)</option>
+                <option value="gemini-1.5-flash">gemini-1.5-flash (Google GenAI Cloud)</option>
+                <option value="llama-3.3-70b-versatile">llama-3.3-70b-versatile (Groq Cloud - High Speed)</option>
+                <option value="llama-3.1-8b-instant">llama-3.1-8b-instant (Groq Cloud - Fast)</option>
               </select>
               <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginTop: '0.2rem' }}>
-                qwen2.5:3b runs locally via Ollama with 100% privacy and zero external data leaks.
+                Select between Ollama (Local), Google Gemini (Cloud), or Groq (Ultra-fast Cloud Inference).
               </div>
             </div>
 

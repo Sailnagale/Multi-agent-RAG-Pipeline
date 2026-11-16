@@ -5,6 +5,7 @@ import DashboardPage from './components/DashboardPage';
 import AnalysisPage from './components/AnalysisPage';
 import HistoryPage from './components/HistoryPage';
 import SettingsPage from './components/SettingsPage';
+import LoginPage from './components/LoginPage';
 import AuthModal from './components/AuthModal';
 
 export default function App() {
@@ -52,6 +53,19 @@ export default function App() {
     localStorage.setItem('finrag_user', JSON.stringify(updatedData));
   };
 
+  // If user navigated to full-page login
+  if (activePage === 'login') {
+    return (
+      <LoginPage
+        onLogin={(userData) => {
+          handleLogin(userData);
+          setActivePage('dashboard');
+        }}
+        onBack={() => setActivePage('dashboard')}
+      />
+    );
+  }
+
   return (
     <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column' }}>
       {/* Top Navigation */}
@@ -81,6 +95,8 @@ export default function App() {
           <DashboardPage
             setActivePage={setActivePage}
             setSelectedAnalysisId={setSelectedAnalysisId}
+            onOpenAuth={() => setAuthModalOpen(true)}
+            user={user}
           />
         )}
 

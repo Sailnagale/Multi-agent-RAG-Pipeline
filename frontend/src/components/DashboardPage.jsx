@@ -12,7 +12,9 @@ import {
   ChevronRight,
   Trash2,
   PieChart as PieIcon,
-  Activity
+  Activity,
+  LogIn,
+  User
 } from 'lucide-react';
 import { 
   ResponsiveContainer, 
@@ -26,7 +28,7 @@ import {
   YAxis
 } from 'recharts';
 
-export default function DashboardPage({ setActivePage, setSelectedAnalysisId }) {
+export default function DashboardPage({ setActivePage, setSelectedAnalysisId, onOpenAuth, user }) {
   const [historyList, setHistoryList] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
@@ -107,17 +109,58 @@ export default function DashboardPage({ setActivePage, setSelectedAnalysisId }) 
           </p>
         </div>
 
-        <button
-          onClick={() => {
-            setSelectedAnalysisId(null);
-            setActivePage('analysis');
-          }}
-          className="btn btn-primary"
-          style={{ padding: '0.65rem 1.25rem' }}
-        >
-          <Plus size={18} />
-          New Company Analysis
-        </button>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap' }}>
+          {/* Dashboard Login Button */}
+          {user ? (
+            <button
+              onClick={() => setActivePage('login')}
+              className="btn btn-secondary"
+              style={{
+                padding: '0.65rem 1.15rem',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '0.5rem',
+                border: '1px solid var(--border-medium)',
+                background: 'rgba(59, 130, 246, 0.08)'
+              }}
+              title="Click to open the interactive animated Minions & Cats login page"
+            >
+              <User size={16} color="var(--accent-blue)" />
+              <span>{user.name.split(' ')[0]} (Interactive Login Page)</span>
+            </button>
+          ) : (
+            <button
+              onClick={() => setActivePage('login')}
+              className="btn"
+              style={{
+                padding: '0.65rem 1.25rem',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '0.5rem',
+                background: 'linear-gradient(135deg, #2563eb, #8b5cf6)',
+                color: '#fff',
+                fontWeight: 700,
+                boxShadow: '0 4px 14px rgba(37, 99, 235, 0.35)'
+              }}
+              title="Open full-page login"
+            >
+              <LogIn size={18} />
+              <span>Log In</span>
+            </button>
+          )}
+
+          <button
+            onClick={() => {
+              setSelectedAnalysisId(null);
+              setActivePage('analysis');
+            }}
+            className="btn btn-primary"
+            style={{ padding: '0.65rem 1.25rem' }}
+          >
+            <Plus size={18} />
+            New Company Analysis
+          </button>
+        </div>
       </div>
 
       {/* 4 Top KPI Cards */}

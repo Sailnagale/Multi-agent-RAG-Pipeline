@@ -215,7 +215,7 @@ export default function Navbar({
           </div>
         ) : (
           <button
-            onClick={onOpenAuth}
+            onClick={() => setActivePage('login')}
             className="btn btn-primary"
             style={{ padding: '0.4rem 0.85rem', fontSize: '0.8rem' }}
           >
